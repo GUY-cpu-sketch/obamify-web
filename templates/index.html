@@ -1,40 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Obamify Real-Time</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta charset="UTF-8">
+<title>Real-Time Obamify</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>Draw & Obamify!</h1>
+<h1>Draw & Morph to Target</h1>
+
+<div>
   <canvas id="drawCanvas" width="128" height="128" style="border:1px solid #000;"></canvas>
-  <h2>Live Result:</h2>
   <img id="obamaPreview" width="128" height="128">
+</div>
 
-  <script>
-    const canvas = document.getElementById("drawCanvas");
-    const ctx = canvas.getContext("2d");
-    let drawing = false;
+<label>Change Target Image:</label>
+<input type="file" id="targetInput">
 
-    const ws = new WebSocket("ws://YOUR_SERVER:5000/ws"); // replace YOUR_SERVER
+<script>
+const canvas = document.getElementById("drawCanvas");
+const ctx = canvas.getContext("2d");
+let drawing = false;
 
-    canvas.onmousedown = () => drawing = true;
-    canvas.onmouseup = () => drawing = false;
+// WebSocket
+const ws = new WebSocket("ws://YOUR_SERVER:5000/ws"); // replace YOUR_SERVER with your server URL or localhost
 
-    canvas.onmousemove = (e) => {
-      if (!drawing) return;
-      ctx.fillRect(e.offsetX, e.offsetY, 2, 2);
-      sendCanvas();
-    };
+// Draw on canvas
+canvas.onmousedown = () => drawing = true;
+canvas.onmouseup = () => drawing = false;
+canvas.onmousemove = (e) => {
+    if (!drawing) return;
+    ctx.fillRect(e.offsetX, e.offsetY, 2, 2);
+    sendCanvas();
+};
 
-    function sendCanvas() {
-      const dataURL = canvas.toDataURL("image/png");
-      ws.send(dataURL);
-    }
+// Send canvas to server
+function sendCanvas() {
+    const dataURL = canvas.toDataURL("image/png");
+    ws.send(dataURL);
+}
 
-    ws.onmessage = (msg) => {
-      document.getElementById("obamaPreview").src = msg.data;
-    };
-  </script>
+// Receive updated morphed image
+ws.onmessage = (msg) => {
+    document.getElementById("obamaPreview").src = msg.data;
+};
+
+// Upload target image
+document.getElementById("targetInput").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("target", file);
+    await fetch("/upload_target", { method: "POST", body: formData });
+    alert("Target image updated!");
+});
+</script>
 </body>
 </html>
