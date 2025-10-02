@@ -10,7 +10,7 @@ from threading import Thread
 app = Flask(__name__)
 
 # Default target image
-target_img = cv2.imread("default_target.png")  # You can put any default image here
+target_img = cv2.imread("obama.png")  # You can put any default image here
 
 @app.route("/")
 def index():
