@@ -4,6 +4,6 @@ body {
   padding: 2rem;
 }
 
-input, button {
-  margin: 1rem;
+canvas {
+  cursor: crosshair;
 }
