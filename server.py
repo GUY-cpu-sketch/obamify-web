@@ -1,28 +1,39 @@
-from flask import Flask, request, send_file, render_template
+import asyncio
+import base64
 import cv2
 import numpy as np
-from obamify import obamify  # make sure the Obamify repo files are in the same folder
+from obamify import obamify
+import websockets
+from flask import Flask, render_template
+from threading import Thread
 
 app = Flask(__name__)
 
+# Serve the website
 @app.route("/")
 def index():
     return render_template("index.html")
 
-@app.route("/obamify", methods=["POST"])
-def obamify_route():
-    if 'image' not in request.files:
-        return "No file uploaded", 400
+# Run Flask in a separate thread
+def run_flask():
+    app.run(host="0.0.0.0", port=8000)
 
-    file = request.files['image']
-    file_bytes = np.frombuffer(file.read(), np.uint8)
-    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+Thread(target=run_flask).start()
 
-    # Run Obamify transformation
-    output = obamify(img)
-    cv2.imwrite("result.png", output)
+# WebSocket server for real-time Obamify
+async def obamify_ws(websocket, path):
+    async for message in websocket:
+        header, data = message.split(',', 1)
+        img_bytes = base64.b64decode(data)
+        img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
 
-    return send_file("result.png", mimetype='image/png')
+        # Transform with Obamify
+        output = obamify(img)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+        _, buffer = cv2.imencode('.png', output)
+        encoded = base64.b64encode(buffer).decode('utf-8')
+        await websocket.send(f"data:image/png;base64,{encoded}")
+
+start_server = websockets.serve(obamify_ws, "0.0.0.0", 5000)
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()
