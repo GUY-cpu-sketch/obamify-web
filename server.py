@@ -1,13 +1,11 @@
 from flask import Flask, render_template
-import asyncio
-import base64
+from flask_socketio import SocketIO, emit
 import cv2
 import numpy as np
 from obamify import obamify
-import websockets
-from threading import Thread
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Fixed target image
 target_img = cv2.imread("target.png")
@@ -16,29 +14,24 @@ target_img = cv2.imread("target.png")
 def index():
     return render_template("index.html")
 
-# Flask server in a separate thread
-def run_flask():
-    app.run(host="0.0.0.0", port=8000)
+@socketio.on('draw_data')
+def handle_draw(data):
+    try:
+        # Decode base64 image
+        header, encoded = data.split(',', 1)
+        img_bytes = np.frombuffer(base64.b64decode(encoded), np.uint8)
+        source_img = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
 
-Thread(target=run_flask).start()
+        # Morph with target
+        output = obamify(source_img, target_img, alpha=0.6)
 
-# WebSocket server
-async def obamify_ws(websocket, path):
-    async for message in websocket:
-        try:
-            header, data = message.split(',', 1)
-            img_bytes = base64.b64decode(data)
-            source_img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+        # Encode back to base64
+        _, buffer = cv2.imencode('.png', output)
+        encoded_output = base64.b64encode(buffer).decode('utf-8')
+        emit('update_image', f"data:image/png;base64,{encoded_output}")
+    except Exception as e:
+        print("Error:", e)
 
-            # Morph with fixed target
-            output = obamify(source_img, target_img, alpha=0.6)
-
-            _, buffer = cv2.imencode('.png', output)
-            encoded = base64.b64encode(buffer).decode('utf-8')
-            await websocket.send(f"data:image/png;base64,{encoded}")
-        except Exception as e:
-            print("Error processing image:", e)
-
-start_server = websockets.serve(obamify_ws, "0.0.0.0", 5000)
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+if __name__ == "__main__":
+    # Use eventlet server
+    socketio.run(app, host="0.0.0.0", port=5000)
