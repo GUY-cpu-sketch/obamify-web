@@ -2,36 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Obamify</title>
+  <title>Obamify Real-Time</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>Obamify Your Image</h1>
-  <form id="uploadForm" enctype="multipart/form-data">
-    <input type="file" name="image" id="imageInput" required>
-    <button type="submit">Obamify!</button>
-  </form>
-  <h2>Result:</h2>
-  <img id="result" src="" alt="Obamafied Image">
+  <h1>Draw & Obamify!</h1>
+  <canvas id="drawCanvas" width="128" height="128" style="border:1px solid #000;"></canvas>
+  <h2>Live Result:</h2>
+  <img id="obamaPreview" width="128" height="128">
 
   <script>
-    const form = document.getElementById("uploadForm");
-    const resultImg = document.getElementById("result");
+    const canvas = document.getElementById("drawCanvas");
+    const ctx = canvas.getContext("2d");
+    let drawing = false;
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const file = document.getElementById("imageInput").files[0];
-      if (!file) return alert("Please select an image!");
+    const ws = new WebSocket("ws://YOUR_SERVER:5000/ws"); // replace YOUR_SERVER
 
-      const formData = new FormData();
-      formData.append("image", file);
+    canvas.onmousedown = () => drawing = true;
+    canvas.onmouseup = () => drawing = false;
 
-      const response = await fetch("/obamify", { method: "POST", body: formData });
-      if (!response.ok) return alert("Error processing image!");
+    canvas.onmousemove = (e) => {
+      if (!drawing) return;
+      ctx.fillRect(e.offsetX, e.offsetY, 2, 2);
+      sendCanvas();
+    };
 
-      const blob = await response.blob();
-      resultImg.src = URL.createObjectURL(blob);
-    });
+    function sendCanvas() {
+      const dataURL = canvas.toDataURL("image/png");
+      ws.send(dataURL);
+    }
+
+    ws.onmessage = (msg) => {
+      document.getElementById("obamaPreview").src = msg.data;
+    };
   </script>
 </body>
 </html>
